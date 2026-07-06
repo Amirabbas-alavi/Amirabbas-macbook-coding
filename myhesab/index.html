@@ -79,30 +79,49 @@
           </select>
         </label>
       </div>
+      <div class="formrow">
+        <label>تاریخ شروع<input id="pStartDate" placeholder="مثلاً: ۱ خرداد ۱۴۰۵"></label>
+        <label>تاریخ پایان (تحویل)<input id="pEndDate" placeholder="مثلاً: ۱ شهریور ۱۴۰۵"></label>
+      </div>
+      <label>توضیحات (اختیاری)<textarea id="pDesc" rows="2" placeholder="توضیح کوتاه درباره پروژه..."></textarea></label>
     </div>
 
     <!-- Income fields -->
     <div class="form-fields-income" id="fieldsIncome">
-      <label>عنوان دریافتی<input id="iName" placeholder="مثلاً: قسط اول پروژه وب"></label>
-      <label>نام کارفرما<input id="iClient" placeholder="مثلاً: شرکت آلفا"></label>
+      <label>پروژه مرتبط
+        <select id="iProject"><option value="">-- انتخاب پروژه --</option></select>
+      </label>
+      <label>عنوان مرحله پرداخت<input id="iName" placeholder="مثلاً: پیش‌پرداخت، قسط اول، تسویه نهایی"></label>
       <div class="formrow">
         <label>مبلغ (تومان)<input id="iAmount" type="number" placeholder="مثلاً 5000000"></label>
         <label>تاریخ سررسید<input id="iDate" placeholder="مثلاً: ۱ تیر ۱۴۰۵"></label>
       </div>
-      <label class="check"><input type="checkbox" id="iPassThrough">این مبلغ از بودجه امانتی کارفرماست</label>
+      <label>وضعیت
+        <select id="iStatus">
+          <option value="در انتظار">در انتظار دریافت</option>
+          <option value="دریافت شده">دریافت شده</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="iPassThrough">این مبلغ بودجه امانتی کارفرماست (از سود من نیست)</label>
     </div>
 
     <!-- Expense fields -->
     <div class="form-fields-expense" id="fieldsExpense">
       <label>عنوان هزینه<input id="eName" placeholder="مثلاً: اشتراک Figma"></label>
+      <label>پروژه مرتبط (اختیاری)
+        <select id="eProject"><option value="">-- هزینه عمومی کاری --</option></select>
+      </label>
       <div class="formrow">
         <label>مبلغ (تومان)<input id="eAmount" type="number" placeholder="مثلاً 2500000"></label>
         <label>دسته‌بندی
           <select id="eCat">
-            <option>هزینه پروژه</option>
+            <option>هزینه مستقیم پروژه</option>
+            <option>همکار / برون‌سپاری</option>
             <option>ابزار کاری</option>
-            <option>همکار/برون‌سپاری</option>
-            <option>شخصی</option>
+            <option>اشتراک نرم‌افزار</option>
+            <option>تبلیغات</option>
+            <option>اینترنت / زیرساخت</option>
+            <option>رفت‌وآمد</option>
             <option>سایر</option>
           </select>
         </label>
@@ -110,13 +129,14 @@
       <div class="formrow">
         <label>نوع هزینه
           <select id="eType">
-            <option value="کاری">کاری (اورهد)</option>
-            <option value="شخصی">شخصی</option>
+            <option value="BUSINESS_OVERHEAD">هزینه عمومی کاری</option>
+            <option value="DIRECT_PROJECT">هزینه مستقیم پروژه</option>
+            <option value="OUTSOURCE">همکار / برون‌سپاری</option>
           </select>
         </label>
         <label>تاریخ<input id="eDate" placeholder="مثلاً: ۱ تیر ۱۴۰۵"></label>
       </div>
-      <label class="check"><input type="checkbox" id="ePassThrough">از محل بودجه امانتی کارفرماست</label>
+      <label class="check"><input type="checkbox" id="ePassThrough">از محل بودجه امانتی کارفرما پرداخت شده</label>
     </div>
 
     <button class="primary" type="submit">ثبت و ذخیره</button>
@@ -179,13 +199,22 @@ function renderDashboard(){
   const cost=appMode==="total"?allCost:workCost;
   const maxBar=Math.max(received,1);
 
-  const projectsHTML=records.projects.slice(0,3).map((p,i)=>`
-    <div class="project">
-      <div class="pname"><span class="picon ${i===1?"orange":i===2?"blue":""}">${p.client[0]||"؟"}</span><div><strong>${p.name}</strong><small>${p.client}</small></div></div>
-      <div class="stat"><span>دریافتی</span><b class="amount">${fa(p.value)}</b></div>
-      <div class="stat"><span>سود خالص</span><b class="amount profit">${fa(p.profit)}</b></div>
+  function calcProject(p){
+    const paid=records.income.filter(x=>x.project===p.name&&x.status==="دریافت شده"&&!x.isClientBudget).reduce((s,x)=>s+x.amount,0);
+    const pending=records.income.filter(x=>x.project===p.name&&x.status==="در انتظار"&&!x.isClientBudget).reduce((s,x)=>s+x.amount,0);
+    const directCost=records.expenses.filter(x=>x.project===p.name&&!x.isClientBudget).reduce((s,x)=>s+x.amount,0);
+    return{paid,pending,directCost,profit:paid-directCost};
+  }
+  const projectsHTML=records.projects.slice(0,3).map((p,i)=>{
+    const c=calcProject(p);
+    const nextDue=records.income.filter(x=>x.project===p.name&&x.status==="در انتظار").sort((a,b)=>a.date.localeCompare(b.date))[0];
+    return `<div class="project">
+      <div class="pname"><span class="picon ${i===1?"orange":i===2?"blue":""}">${(p.client[0])||"؟"}</span><div><strong>${p.name}</strong><small>${p.client}</small></div></div>
+      <div class="stat"><span>دریافت‌شده</span><b class="amount">${fa(c.paid)}</b></div>
+      <div class="stat"><span>${nextDue?"سررسید بعدی":"سود خالص"}</span><b class="amount ${nextDue?"":"profit"}">${nextDue?nextDue.date:fa(c.profit)}</b></div>
       <em class="status ${p.status==="تکمیل شده"?"done":""}">${p.status}</em>
-    </div>`).join("")||`<div class="empty">هنوز پروژه‌ای ثبت نشده</div>`;
+    </div>`;
+  }).join("")||`<div class="empty">هنوز پروژه‌ای ثبت نشده</div>`;
 
   content.innerHTML=`
 <section class="welcome">
@@ -228,7 +257,10 @@ function renderDashboard(){
   <div class="panel">
     <div class="head"><div><h2>دریافتی‌های پیش رو</h2><p>قسط‌ها و سررسیدهایی که باید پیگیری کنی</p></div><button class="text add-record" data-type="income">＋ افزودن</button></div>
     ${records.income.filter(x=>x.status==="در انتظار").length?
-      `<div class="timeline">${records.income.filter(x=>x.status==="در انتظار").map(r=>`<div class="due"><div class="date"><span>${r.date.split(" ")[0]}</span><small>${r.date.split(" ")[1]||""}</small></div><div><strong>${r.name}</strong><p>${r.client}</p></div><strong class="amount">${fa(r.amount)}</strong><em>${r.status}</em></div>`).join("")}</div>`
+      `<div class="timeline">${records.income.filter(x=>x.status==="در انتظار").map(r=>{
+        const parts=r.date.split(" ");
+        return `<div class="due"><div class="date"><span>${parts[0]||""}</span><small>${parts[1]||""}</small></div><div><strong>${r.name}</strong><p>${r.project||r.client||"—"}</p></div><strong class="amount">${fa(r.amount)}</strong><em>${r.isClientBudget?"امانتی":"در انتظار"}</em></div>`;
+      }).join("")}</div>`
       :`<div class="empty">هنوز سررسیدی ثبت نشده است.</div>`}
   </div>
   <div class="panel">
@@ -243,29 +275,38 @@ function renderDashboard(){
 }
 
 // ── Projects ──────────────────────────────────────────────────────
+function computeProjectProfit(p){
+  const paid=records.income.filter(x=>x.project===p.name&&x.status==="دریافت شده"&&!x.isClientBudget).reduce((s,x)=>s+x.amount,0);
+  const directCost=records.expenses.filter(x=>x.project===p.name&&!x.isClientBudget).reduce((s,x)=>s+x.amount,0);
+  return paid-directCost;
+}
 function renderProjects(list=records.projects){
   const totalValue=records.projects.reduce((s,p)=>s+p.value,0);
-  const totalProfit=records.projects.reduce((s,p)=>s+p.profit,0);
+  const totalProfit=records.projects.reduce((s,p)=>s+computeProjectProfit(p),0);
   const active=records.projects.filter(p=>p.status==="در حال اجرا").length;
-  const open=records.income.filter(x=>x.status!=="دریافت شده").reduce((s,x)=>s+x.amount,0);
+  const open=records.income.filter(x=>x.status!=="دریافت شده"&&!x.isClientBudget).reduce((s,x)=>s+x.amount,0);
   content.innerHTML=pageHead("projects")+
     `<section class="metric-grid">
       ${metric("ارزش قراردادها",fa(totalValue)+" تومان",`${fa(records.projects.length)} پروژه ثبت‌شده`)}
-      ${metric("سود پیش‌بینی‌شده",fa(totalProfit)+" تومان",totalValue?`${fa(Math.round(totalProfit/totalValue*100))}٪ حاشیه سود`:"بدون داده")}
-      ${metric("در حال اجرا",`${fa(active)} پروژه`,"برنامه‌ریزی‌شده")}
+      ${metric("سود واقعی",fa(totalProfit)+" تومان",totalValue?`بر اساس دریافتی‌های وصول‌شده`:"بدون داده")}
+      ${metric("در حال اجرا",`${fa(active)} پروژه`,"فعال")}
       ${metric("مطالبات باز",fa(open)+" تومان",open?"نیازمند پیگیری":"بدون مطالبه باز")}
     </section>`+
     toolbar(["در حال اجرا","تکمیل شده","پیش‌نویس"])+
     `<section class="data-panel" id="rows">
-      <div class="table-row header"><div>پروژه و کارفرما</div><div>ارزش قرارداد</div><div>سود خالص</div><div>پیشرفت</div><div>وضعیت</div></div>
-      ${list.map((p,i)=>`
-        <div class="table-row clickable">
-          <div class="pname"><span class="picon">${p.client[0]||"؟"}</span><div><strong>${p.name}</strong><small>${p.client}</small></div></div>
+      <div class="table-row header"><div>پروژه و کارفرما</div><div>ارزش قرارداد</div><div>سود واقعی</div><div>پیشرفت مالی</div><div>وضعیت</div></div>
+      ${list.map((p,i)=>{
+        const profit=computeProjectProfit(p);
+        const paid=records.income.filter(x=>x.project===p.name&&x.status==="دریافت شده"&&!x.isClientBudget).reduce((s,x)=>s+x.amount,0);
+        const pct=p.value?Math.min(Math.round(paid/p.value*100),100):p.progress;
+        return `<div class="table-row clickable">
+          <div class="pname"><span class="picon">${(p.client[0])||"؟"}</span><div><strong>${p.name}</strong><small>${p.client}${p.endDate?` · تحویل: ${p.endDate}`:""}</small></div></div>
           <div><strong class="amount">${fa(p.value)}</strong><small>تومان</small></div>
-          <div><strong class="amount positive">${fa(p.profit)}</strong><small>تومان</small></div>
-          <div><strong>${fa(p.progress)}٪</strong><div class="progress"><i style="width:${p.progress}%"></i></div></div>
+          <div><strong class="amount positive">${fa(profit)}</strong><small>تومان</small></div>
+          <div><strong>${fa(pct)}٪</strong><div class="progress"><i style="width:${pct}%"></i></div></div>
           <button class="pill status-btn" data-i="${i}">${p.status}</button>
-        </div>`).join("")||`<div class="empty">هنوز پروژه‌ای ثبت نشده است.</div>`}
+        </div>`;
+      }).join("")||`<div class="empty">هنوز پروژه‌ای ثبت نشده است.</div>`}
     </section>`;
   bindList("projects");
 }
@@ -297,8 +338,8 @@ function renderTransactions(type,list=records[type]){
       <div class="table-row header"><div>عنوان</div><div>${income?"کارفرما":"دسته‌بندی"}</div><div>مبلغ</div><div>تاریخ</div><div>وضعیت</div></div>
       ${list.map((r,i)=>`
         <div class="table-row">
-          <div><strong>${r.name}</strong><small>${income?"پرداخت پروژه":"هزینه ثبت‌شده"}</small></div>
-          <div><strong>${income?r.client:r.cat}</strong></div>
+          <div><strong>${r.name}</strong><small>${income?(r.project||r.client||"—"):(r.project||"عمومی کاری")}</small></div>
+          <div><strong>${income?(r.project||r.client||"—"):r.cat}</strong></div>
           <div><strong class="amount ${income?"positive":"negative"}">${fa(r.amount)}</strong><small>تومان</small></div>
           <div><strong>${r.date}</strong></div>
           <div class="row-actions">
@@ -399,16 +440,34 @@ const formMeta={
   expenses:{icon:"↗",title:"هزینه جدید",desc:"اطلاعات هزینه را وارد کن"}
 };
 
-function openForm(type){
+function populateProjectDropdowns(){
+  const opts=records.projects.map(p=>`<option value="${p.name}">${p.name} — ${p.client}</option>`).join("");
+  const iSel=document.getElementById("iProject");
+  const eSel=document.getElementById("eProject");
+  if(iSel){const prev=iSel.value;iSel.innerHTML=`<option value="">-- انتخاب پروژه --</option>`+opts;if(prev)iSel.value=prev;}
+  if(eSel){const prev=eSel.value;eSel.innerHTML=`<option value="">-- هزینه عمومی کاری --</option>`+opts;if(prev)eSel.value=prev;}
+}
+
+function openForm(type,preProject=""){
   formType=type||"expenses";
   const m=formMeta[formType]||formMeta.expenses;
   document.getElementById("formIcon").textContent=m.icon;
   document.getElementById("formTitle").textContent=m.title;
   document.getElementById("formDesc").textContent=m.desc;
   document.querySelectorAll(".form-fields-project,.form-fields-income,.form-fields-expense").forEach(el=>el.classList.remove("active"));
-  if(formType==="projects")document.getElementById("fieldsProject").classList.add("active");
-  else if(formType==="income"){document.getElementById("fieldsIncome").classList.add("active");document.getElementById("iDate").value=todayStr();}
-  else{document.getElementById("fieldsExpense").classList.add("active");document.getElementById("eDate").value=todayStr();}
+  if(formType==="projects"){
+    document.getElementById("fieldsProject").classList.add("active");
+  } else if(formType==="income"){
+    document.getElementById("fieldsIncome").classList.add("active");
+    document.getElementById("iDate").value=todayStr();
+    populateProjectDropdowns();
+    if(preProject)document.getElementById("iProject").value=preProject;
+  } else {
+    document.getElementById("fieldsExpense").classList.add("active");
+    document.getElementById("eDate").value=todayStr();
+    populateProjectDropdowns();
+    if(preProject)document.getElementById("eProject").value=preProject;
+  }
   q.classList.remove("open");
   fb.classList.add("open");
 }
@@ -447,20 +506,35 @@ document.getElementById("entryForm").onsubmit=e=>{
     const client=document.getElementById("pClient").value.trim()||"کارفرمای جدید";
     const value=parseInt(document.getElementById("pValue").value)||0;
     const status=document.getElementById("pStatus").value;
-    records.projects.unshift({name,client,value,profit:value,status,progress:status==="تکمیل شده"?100:status==="در حال اجرا"?50:10});
+    const startDate=document.getElementById("pStartDate").value.trim();
+    const endDate=document.getElementById("pEndDate").value.trim();
+    const desc=document.getElementById("pDesc").value.trim();
+    records.projects.unshift({name,client,value,status,startDate,endDate,desc,progress:status==="تکمیل شده"?100:status==="در حال اجرا"?50:10});
+    document.getElementById("entryForm").reset();
+    fb.classList.remove("open");
+    if(currentTab==="dashboard")renderDashboard();
+    else showTab(currentTab);
+    toast("پروژه ثبت شد — حالا برنامه پرداخت را اضافه کن");
+    setTimeout(()=>openForm("income",name),700);
+    return;
   } else if(formType==="income"){
-    const name=document.getElementById("iName").value.trim()||"دریافتی جدید";
-    const client=document.getElementById("iClient").value.trim()||"کارفرمای جدید";
+    const project=document.getElementById("iProject").value.trim();
+    const name=document.getElementById("iName").value.trim()||"مرحله پرداخت";
     const amount=parseInt(document.getElementById("iAmount").value)||0;
     const date=document.getElementById("iDate").value||today;
-    records.income.unshift({name,client,amount,date,status:"در انتظار"});
+    const status=document.getElementById("iStatus").value||"در انتظار";
+    const isClientBudget=document.getElementById("iPassThrough").checked;
+    const client=project?(records.projects.find(p=>p.name===project)||{}).client||"":"";
+    records.income.unshift({name,project,client,amount,date,status,isClientBudget});
   } else {
     const name=document.getElementById("eName").value.trim()||"هزینه جدید";
+    const project=document.getElementById("eProject").value.trim();
     const amount=parseInt(document.getElementById("eAmount").value)||0;
     const cat=document.getElementById("eCat").value;
-    const status=document.getElementById("eType").value;
+    const expenseType=document.getElementById("eType").value;
     const date=document.getElementById("eDate").value||today;
-    records.expenses.unshift({name,cat,amount,date,status});
+    const isClientBudget=document.getElementById("ePassThrough").checked;
+    records.expenses.unshift({name,project,cat,amount,date,expenseType,isClientBudget,status:expenseType==="BUSINESS_OVERHEAD"?"کاری":"پروژه‌ای"});
   }
   document.getElementById("entryForm").reset();
   fb.classList.remove("open");
