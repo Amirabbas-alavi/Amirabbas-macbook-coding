@@ -5,7 +5,7 @@ MVP frontend prototype for a Persian personal and freelance accounting product.
 ## Current Contents
 
 - `index.html` - single-file interactive frontend prototype
-- `docs/8pa_myhesab_prd_microscopic.txt` - full product requirements document
+- `docs/MYHESAB_PRODUCT_SPEC.md` - full product requirements and developer specification
 
 ## Notes
 
